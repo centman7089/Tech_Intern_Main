@@ -51,10 +51,98 @@ const getProfile = async (req, res) => {
 // @route   POST api/profile
 // @desc    Create or update user profile
 // @access  Private
+// const updateProfile = async (req, res) => {
+//   try {
+//     const authUserId = req.user._id.toString(); // Authenticated user's ID
+//     const paramId = req.params.id; // ID from the URL
+
+//     if (authUserId !== paramId) {
+//       return res.status(403).json({ message: "Unauthorized to update this profile" });
+//     }
+
+//     const {
+//       firstName,
+//       lastName,
+//       phone,
+//       country,
+//       state,
+//       city,
+//       address,
+//       headline,
+//       location,
+//       about,
+//       bio,
+//       technicalLevel,
+//       educationLevel,
+//       workType,
+//       selectedSkills // Array of skill names
+//     } = req.body;
+
+//     const user = await User.findById(paramId);
+//     if (!user) return res.status(404).json({ message: "User not found" });
+
+//     const profile = await InternProfile.findOne({ user: paramId });
+//     if (!profile) return res.status(404).json({ message: "Intern profile not found" });
+
+//     const updatedUserFields = {};
+//     const updatedProfileFields = {};
+
+//     // Update user fields if provided
+//     if (firstName) updatedUserFields.firstName = firstName;
+//     if (lastName) updatedUserFields.lastName = lastName;
+//     if (phone) updatedUserFields.phone = phone;
+//     if (country) updatedUserFields.country = country;
+//     if (state) updatedUserFields.state = state;
+//     if (city) updatedUserFields.city = city;
+//     if (address) updatedUserFields.address = address;
+
+//     // Update profile fields if provided
+//     if (headline) updatedProfileFields.headline = headline;
+//     if (about) updatedProfileFields.about = about;
+//     if (bio) updatedProfileFields.bio = bio;
+//     if (location) updatedProfileFields.location = location;
+//     if (technicalLevel) updatedProfileFields.technicalLevel = technicalLevel;
+//     if (educationLevel) updatedProfileFields.educationLevel = educationLevel;
+//     if (workType) updatedProfileFields.workType = workType;
+
+//     // Handle selected skills
+//     if (Array.isArray(selectedSkills)) {
+//       const skillIds = await getSkillIdsByNames(selectedSkills);
+//       const existingSkills = profile.selectedSkills.map(id => id.toString());
+//       const uniqueNewSkills = skillIds.filter(id => !existingSkills.includes(id.toString()));
+//       profile.selectedSkills = [...uniqueNewSkills, ...profile.selectedSkills];
+//       updatedProfileFields.selectedSkills = profile.selectedSkills;
+//     }
+
+//     // Apply updates
+//     if (Object.keys(updatedUserFields).length > 0) {
+//       Object.assign(user, updatedUserFields);
+//       await user.save();
+//     }
+
+//     if (Object.keys(updatedProfileFields).length > 0) {
+//       Object.assign(profile, updatedProfileFields);
+//       await profile.save();
+//     }
+
+//     res.status(200).json({
+//       message: "Profile updated successfully",
+//       updatedFields: {
+//         ...(Object.keys(updatedUserFields).length && { user: updatedUserFields }),
+//         ...(Object.keys(updatedProfileFields).length && { profile: updatedProfileFields }),
+//       }
+//     });
+
+//   } catch (err) {
+//     console.error("Error updating profile:", err);
+//     res.status(400).json({ error: err.message });
+//   }
+// };
+
 const updateProfile = async (req, res) => {
   try {
-    const authUserId = req.user._id.toString(); // Authenticated user's ID
-    const paramId = req.params.id; // ID from the URL
+    const authUserId = req.user._id.toString();
+    const paramId = req.params.id;
 
     if (authUserId !== paramId) {
       return res.status(403).json({ message: "Unauthorized to update this profile" });
@@ -75,7 +163,7 @@ const updateProfile = async (req, res) => {
       technicalLevel,
       educationLevel,
       workType,
-      selectedSkills // Array of skill names
+      selectedSkills
     } = req.body;
 
     const user = await User.findById(paramId);
@@ -87,7 +175,6 @@ const updateProfile = async (req, res) => {
     const updatedUserFields = {};
     const updatedProfileFields = {};
 
-    // Update user fields if provided
     if (firstName) updatedUserFields.firstName = firstName;
     if (lastName) updatedUserFields.lastName = lastName;
     if (phone) updatedUserFields.phone = phone;
@@ -96,7 +183,6 @@ const updateProfile = async (req, res) => {
     if (city) updatedUserFields.city = city;
     if (address) updatedUserFields.address = address;
 
-    // Update profile fields if provided
     if (headline) updatedProfileFields.headline = headline;
     if (about) updatedProfileFields.about = about;
     if (bio) updatedProfileFields.bio = bio;
@@ -128,16 +214,38 @@ const updateProfile = async (req, res) => {
     res.status(200).json({
       message: "Profile updated successfully",
       updatedFields: {
-        ...(Object.keys(updatedUserFields).length && { user: updatedUserFields }),
-        ...(Object.keys(updatedProfileFields).length && { profile: updatedProfileFields }),
+        user: {
+          firstName: user.firstName || "",
+          lastName: user.lastName || "",
+          phone: user.phone || "",
+          country: user.country || "",
+          state: user.state || "",
+          city: user.city || "",
+          address: user.address || ""
+        },
+        profile: {
+          headline: profile.headline || "",
+          about: profile.about || "",
+          bio: profile.bio || "",
+          location: profile.location || "",
+          technicalLevel: profile.technicalLevel || "",
+          educationLevel: profile.educationLevel || "",
+          workType: profile.workType || "",
+          selectedSkills: profile.selectedSkills || []
+        }
       }
     });
 
-  } catch (err) {
+  } catch ( err )
+  {
+    console.log(err);
+    
     console.error("Error updating profile:", err);
     res.status(400).json({ error: err.message });
   }
 };
+
+
 
 
 
@@ -298,55 +406,84 @@ const updateProfile = async (req, res) => {
 // }
  
 
-  const getUserProfile = async (req, res) => {
-    try {
-      const { id } = req.params;
-  
-      let user;
-      if (mongoose.Types.ObjectId.isValid(id)) {
-        user = await User.findById(id)
-          .select("firstName lastName email phone country state city address headline")
-          .populate({
-            path: "profile",
-            model: "InternProfile",
-            populate: [
-              { path: "selectedCourses", model: "Course", select: "name" },
-              { path: "selectedSkills", model: "Skill", select: "name category" }
-            ]
-          });
-      } else {
-        return res.status(400).json({ error: "Invalid user ID" });
-      }
-  
-      if (!user || !user.profile) {
-        return res.status(404).json({ error: "User or profile not found" });
-      }
-  
-      const response = {
-        firstName: user.firstName || '',
-        lastName: user.lastName || '',
-        email: user.email || '',
-        phone: user.phone || '',
-        country: user.country || '',
-        state: user.state || '',
-        city: user.city || '',
-        address: user.address || '',
-        selectedCourses: user.profile.selectedCourses.map(course => course.name)  || '',
-        selectedSkills: user.profile.selectedSkills.map(skill => skill.name) || '',
-        educationLevel: user.profile.educationLevel || '',
-        technicalLevel: user.profile.technicalLevel || '',
-        headline: user.profile.headline || '',
-        workType: user.profile.workType,
-        about: user.profile.about || '',
-        profilePic: user.profile.profilePic || ''
-      };
-  
-      res.status(200).json(response);
-    } catch (error) {
-      console.error("Error fetching user profile:", error);
-      res.status(500).json({ error: "Server error" });
+const getUserProfile = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "Invalid user ID" });
     }
+
+    const user = await User.findById(id)
+      .select("firstName lastName email phone country state city address headline followers following profilePic")
+      .populate({
+        path: "profile",
+        model: "InternProfile",
+        populate: [
+          { path: "selectedCourses", model: "Course", select: "name" },
+          { path: "selectedSkills", model: "Skill", select: "name category" }
+        ]
+      })
+      .populate("followers", "firstName lastName email profilePic") // ✅ Populate follower users
+      .populate("following", "firstName lastName email profilePic"); // ✅ Populate following users
+
+    if (!user || !user.profile) {
+      return res.status(404).json({ error: "User or profile not found" });
+    }
+
+    const response = {
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
+      email: user.email || '',
+      phone: user.phone || '',
+      country: user.country || '',
+      state: user.state || '',
+      city: user.city || '',
+      address: user.address || '',
+      headline: user.profile.headline || '',
+      workType: user.profile.workType || '',
+      about: user.profile.about || '',
+      educationLevel: user.profile.educationLevel || '',
+      technicalLevel: user.profile.technicalLevel || '',
+      profilePic: user.profile.profilePic || '',
+
+      selectedCourses: user.profile.selectedCourses?.map(course => ({
+        id: course._id.toString(),
+        name: course.name
+      })) || [],
+
+      selectedSkills: user.profile.selectedSkills?.map(skill => ({
+        id: skill._id.toString(),
+        name: skill.name,
+        category: skill.category
+      })) || [],
+
+      followers: user.followers?.map(f => ({
+        id: f._id.toString(),
+        firstName: f.firstName || '',
+        lastName: f.lastName || '',
+        email: f.email || '',
+        profilePic: f.profilePic || ''
+      })) || [],
+
+      following: user.following?.map(f => ({
+        id: f._id.toString(),
+        firstName: f.firstName || '',
+        lastName: f.lastName || '',
+        email: f.email || '',
+        profilePic: f.profilePic || ''
+      })) || []
+    };
+
+    res.status(200).json(response);
+  } catch (error) {
+    console.error("Error fetching user profile:", error);
+    res.status(500).json({ error: "Server error" });
+  }
 };
+
+
+
   
 
   // const updateInternProfilePhoto = async (req, res) => {

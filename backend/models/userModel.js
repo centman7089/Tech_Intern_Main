@@ -52,14 +52,14 @@ const userSchema = mongoose.Schema(
 			type: String,
 			default: "https://res.cloudinary.com/dq5puvtne/image/upload/v1740648447/next_crib_avatar_jled2z.jpg"
 		  },
-		followers: {
-			type: [String],
-			default: [],
-		},
-		following: {
-			type: [String],
-			default: [],
-		},
+		  followers: [{
+			type: mongoose.Schema.Types.ObjectId,
+			ref: "User"
+		  }],
+		  following: [{
+			type: mongoose.Schema.Types.ObjectId,
+			ref: "User"
+		  }],
 		isFrozen: {
 			type: Boolean,
 			default: false,

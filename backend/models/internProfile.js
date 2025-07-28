@@ -86,6 +86,15 @@ const internProfileSchema = new mongoose.Schema({
     type: String,
     default: "https://res.cloudinary.com/dq5puvtne/image/upload/v1740648447/next_crib_avatar_jled2z.jpg"
   },
+  followers: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User"
+      }],
+      following: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User"
+      }],
+
   experience: [
     {
       title: {
