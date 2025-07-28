@@ -456,23 +456,26 @@ const getUserProfile = async (req, res) => {
         id: skill._id.toString(),
         name: skill.name,
         category: skill.category
-      })) || [],
+      } ) ) || [],
+      
+      followersCount: user.followers?.length || 0,
+      followingCount: user.following?.length || 0
 
-      followers: user.followers?.map(f => ({
-        id: f._id.toString(),
-        firstName: f.firstName || '',
-        lastName: f.lastName || '',
-        email: f.email || '',
-        profilePic: f.profilePic || ''
-      })) || [],
+      // followers: user.followers?.map(f => ({
+      //   id: f._id.toString(),
+      //   firstName: f.firstName || '',
+      //   lastName: f.lastName || '',
+      //   email: f.email || '',
+      //   profilePic: f.profilePic || ''
+      // })) || [],
 
-      following: user.following?.map(f => ({
-        id: f._id.toString(),
-        firstName: f.firstName || '',
-        lastName: f.lastName || '',
-        email: f.email || '',
-        profilePic: f.profilePic || ''
-      })) || []
+      // following: user.following?.map(f => ({
+      //   id: f._id.toString(),
+      //   firstName: f.firstName || '',
+      //   lastName: f.lastName || '',
+      //   email: f.email || '',
+      //   profilePic: f.profilePic || ''
+      // })) || []
     };
 
     res.status(200).json(response);
