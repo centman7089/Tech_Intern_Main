@@ -7,36 +7,44 @@ import mongoose from "mongoose";
 
 
 const createPost = async (req, res) => {
-	try {
-	  const { text } = req.body;
-	  const postedBy = req.user?._id;
-  
-	  if (!text) return res.status(400).json({ error: "Text field is required" });
-	  if (!postedBy || !mongoose.Types.ObjectId.isValid(postedBy)) {
-		return res.status(400).json({ error: "Invalid user ID" });
-	  }
-  
-	  let imgUrl = "";
-	  if (req.file) {
-		try {
-		  const uploadRes = await cloudinary.uploader.upload(req.file.path, {
-			folder: "posts",
-		  });
-		  imgUrl = uploadRes.secure_url;
-		  await fs.unlink(req.file.path);
-		} catch (uploadErr) {
-		  console.error("Image upload failed:", uploadErr);
-		  return res.status(500).json({ error: "Image upload failed" });
-		}
-	  }
-  
-	  const newPost = await Post.create({ postedBy, text, img: imgUrl });
-	  res.status(201).json(newPost);
-	} catch (err) {
-	  console.error(err);
-	  res.status(500).json({ error: err.message });
-	}
-  };
+  try {
+    const { text } = req.body;
+    const routeUserId = req.params.id; // From URL
+    const loggedInUserId = req.user?._id; // From token
+
+    // Validate user ID from route and ensure user owns it
+    if (!mongoose.Types.ObjectId.isValid(routeUserId)) {
+      return res.status(400).json({ error: "Invalid user ID in route." });
+    }
+
+    if (loggedInUserId.toString() !== routeUserId.toString()) {
+      return res.status(403).json({ error: "Unauthorized to create post for this user." });
+    }
+
+    if (!text) return res.status(400).json({ error: "Text field is required" });
+
+    let imgUrl = "";
+    if (req.file) {
+      try {
+        const uploadRes = await cloudinary.uploader.upload(req.file.path, {
+          folder: "posts",
+        });
+        imgUrl = uploadRes.secure_url;
+        await fs.unlink(req.file.path);
+      } catch (uploadErr) {
+        console.error("Image upload failed:", uploadErr);
+        return res.status(500).json({ error: "Image upload failed" });
+      }
+    }
+
+    const newPost = await Post.create({ postedBy: routeUserId, text, img: imgUrl });
+    res.status(201).json(newPost);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
 
 const getPost = async (req, res) => {
 	try {
@@ -170,20 +178,32 @@ const getFeedPosts = async (req, res) => {
 
 
 const getUserPosts = async (req, res) => {
-	const { username } = req.params;
-	try {
-		const user = await User.findOne({ username });
-		if (!user) {
-			return res.status(404).json({ error: "User not found" });
-		}
+  const userId = req.params.id;
 
-		const posts = await Post.find({ postedBy: user._id }).sort({ createdAt: -1 });
+  try {
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ error: "Invalid user ID" });
+    }
 
-		res.status(200).json(posts);
-	} catch (error) {
-		res.status(500).json({ error: error.message });
-	}
+    // Ensure the requesting user matches the requested ID
+    if (req.user._id.toString() !== userId) {
+      return res.status(403).json({ error: "Unauthorized to access posts of this user" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const posts = await Post.find({ postedBy: userId }).sort({ createdAt: -1 });
+
+    res.status(200).json(posts);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 };
+
+
 
 export { createPost, getPost, deletePost, likeUnlikePost, replyToPost, getFeedPosts, getUserPosts };
 
