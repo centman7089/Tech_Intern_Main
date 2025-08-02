@@ -364,94 +364,67 @@ const changePassword = async (req, res) => {
 
 
 
-const forgotPassword = async ( req, res ) =>
-{
-	try
-	{
-		const { email } = req.body;
-		const employer = await Employer.findOne( { email } );
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const employer = await Employer.findOne({ email });
+    if (!employer) return res.status(400).json({ msg: "Email not found" });
 
-		if ( !employer )
-		{
-			return res.status( 400 ).json( { msg: "Email not found" } );
-		}
-
-		const code = employer.setPasswordResetCode();
-		await employer.save( { validateBeforeSave: false } )
-		await sendEmail( email, "Password Reset Code", `Your reset code is: ${ code }` );
-		res.json( { msg: "Password reset code sent" } );
-	} catch ( err )
-	{
-		res.status( 500 ).json( { msg: err.message } );
-	}
+    const code = employer.setPasswordResetCode();
+    await employer.save({ validateBeforeSave: false });
+    await sendEmail(email, "Password Reset Code", `Your reset code is: ${code}`);
+    res.json({ msg: "Password reset code sent" });
+  } catch (err) {
+    res.status(500).json({ msg: err.message });
+  }
 };
 
 
-const verifyResetCode = async ( req, res ) =>
-{
-	try
-	{
-		const { email, code } = req.body;
-		const employer = await Employer.findOne( { email } );
+const verifyResetCode = async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    const employer = await Employer.findOne({ email });
 
-		if ( !employer || !employer.validateResetCode( code ) )
-		{
-			return res.status( 400 ).json( { message: "Invalid/expired OTP" } );
-		}
+    if (!employer || !employer.validateResetCode(code))
+      return res.status(400).json({ message: "Invalid/expired Code" });
 
-		// Generate short-lived JWT (15 mins expiry)
-		const token = jwt.sign(
-			{ employerId: employer._id, purpose: "password_reset" },
-			process.env.JWT_SECRET,
-			{ expiresIn: "15m" }
-		);
+    const token = jwt.sign(
+      { employerId: employer._id, purpose: "password_reset" },
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" }
+    );
 
-		res.json( { success: true, token, message: "OTP verified" } );
-	} catch ( error )
-	{
-		res.status( 500 ).json( { message: "Server error" } );
-	}
+    res.json({ success: true, token, message: "Code verified" });
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
 };
+
 // Step 3 – change the password with the JWT
-const resetPassword = async ( req, res ) =>
-{
-	try
-	{
-		const { token, newPassword, confirmPassword } = req.body;
+ const resetPassword = async (req, res) => {
+  try {
+    const { token, newPassword, confirmPassword } = req.body;
+    if (newPassword !== confirmPassword)
+      return res.status(400).json({ message: "Passwords do not match" });
 
-		if ( newPassword !== confirmPassword )
-		{
-			return res.status( 400 ).json( { message: "Passwords do not match" } );
-		}
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.purpose !== "password_reset")
+      return res.status(400).json({ message: "Invalid token" });
 
-		// Verify JWT
-		const decoded = jwt.verify( token, process.env.JWT_SECRET );
-		if ( decoded.purpose !== "password_reset" )
-		{
-			return res.status( 400 ).json( { message: "Invalid token" } );
-		}
+    const employer = await Employer.findById(decoded.employerId);
+    if (!employer) return res.status(404).json({ message: "User not found" });
 
-		const employer = await Employer.findById( decoded.employerId );
-		if ( !employer )
-		{
-			return res.status( 404 ).json( { message: "employer not found" } );
-		}
+    employer.password = await bcrypt.hash(newPassword, 10);
+    employer.emailCode = undefined;
+    employer.emailCodeExpires = undefined;
+    await employer.save();
 
-		// Update password & clear OTP
-		employer.password = newPassword;
-		employer.otp = undefined;
-		employer.otpExpires = undefined;
-		await employer.save();
-
-		res.json( { success: true, message: "Password updated" } );
-	} catch ( error )
-	{
-		if ( error.name === "TokenExpiredError" )
-		{
-			return res.status( 400 ).json( { message: "Token expired" } );
-		}
-		res.status( 500 ).json( { message: "Server error" } );
-	}
+    res.json({ success: true, message: "Password updated" });
+  } catch (err) {
+    if (err.name === "TokenExpiredError")
+      return res.status(400).json({ message: "Token expired" });
+    res.status(500).json({ message: "Server error" });
+  }
 };
 
 const uploadCacDocument = async (req, res) => {

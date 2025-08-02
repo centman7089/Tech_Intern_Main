@@ -356,8 +356,8 @@ export const resetPassword = async (req, res) => {
     if (!admin) return res.status(404).json({ message: "User not found" });
 
     admin.password = await bcrypt.hash(newPassword, 10);
-    admin.otp = undefined;
-    admin.otpExpires = undefined;
+    admin.emailCode = undefined;
+    admin.emailCodeExpires = undefined;
     await admin.save();
 
     res.json({ success: true, message: "Password updated" });

@@ -2,7 +2,7 @@
 // Employer.js
 
 import mongoose from "mongoose";
-// import crypto from "crypto"
+import crypto from "crypto"
 import bcrypt from "bcryptjs"
 
 const EmployerSchema = new mongoose.Schema( {
@@ -78,22 +78,6 @@ const EmployerSchema = new mongoose.Schema( {
 
 
 
-// EmployerSchema.methods.setPasswordResetCode = function ()
-// {
-// 	const code = Math.floor( 1000 + Math.random() * 9000 ).toString();
-// 	this.resetCode = crypto.createHash( "sha256" ).update( code ).digest( "hex" )
-// 	this.resetCodeExpires = Date.now() + 10 * 60 * 1000; // 10minute
-// 	return code; // we will email this
-// };
-
-// EmployerSchema.methods.validateResetCode = function ( code )
-// {
-// 	const hash = crypto.createHash( "sha256" ).update( code ).digest( "hex" );
-// 	return (
-// 		hash === this.resetCode && this.resetCodeExpires && this.resetCodeExpires > Date.now()
-// 	);
-// }
-
 // Hash password before saving
 EmployerSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
@@ -105,6 +89,23 @@ EmployerSchema.pre("save", async function (next) {
 EmployerSchema.methods.correctPassword = async function (inputPassword) {
   return await bcrypt.compare(inputPassword, this.password);
 };
+
+EmployerSchema.methods.setPasswordResetCode = function ()
+{
+	const code = Math.floor( 1000 + Math.random() * 9000 ).toString();
+	this.resetCode = crypto.createHash( "sha256" ).update( code ).digest( "hex" )
+	this.resetCodeExpires = Date.now() + 10 * 60 * 1000; // 10minute
+	return code; // we will email this
+};
+
+EmployerSchema.methods.validateResetCode = function ( code )
+{
+	const hash = crypto.createHash( "sha256" ).update( code ).digest( "hex" );
+	return (
+		hash === this.resetCode && this.resetCodeExpires && this.resetCodeExpires > Date.now()
+	);
+}
+
 
 const Employer = mongoose.model( "Employer", EmployerSchema )
 
