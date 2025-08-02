@@ -16,7 +16,7 @@ EmployerRouter.post("/verify", verifyEmail);
 EmployerRouter.post("/resend-code", resendCode);
 EmployerRouter.post( "/login", login );
 EmployerRouter.post("/verify-reset-code", verifyResetCode);
-EmployerRouter.post("/forgot-password",protectEmployer, forgotPassword);
+EmployerRouter.post("/forgot-password", forgotPassword);
 EmployerRouter.post("/reset-password", protectEmployer, resetPassword);
 EmployerRouter.post( "/change-password", protectEmployer, changePassword );
 EmployerRouter.put( "/update/:id", protectEmployer, updateUser );
