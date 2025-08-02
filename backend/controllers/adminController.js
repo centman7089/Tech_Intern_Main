@@ -378,10 +378,19 @@ export const getAdminUser = async (req, res) => {
 };
 
 export const verifyCac = async (req, res) => {
-  const employer = await Employer.findById(req.params.employerId);
-  if (!employer) return res.status(404).json({ error: "Employer not found" });
+  try {
+    const employer = await Employer.findById(req.params.employerId);
+    if (!employer) return res.status(404).json({ error: "Employer not found" });
 
-  employer.cacVerified = true;
-  await employer.save();
-  res.json({ message: "CAC verified successfully." });
-}
+    employer.cacStatus = "approved"; // ✅ Mark CAC as approved
+    employer.cacVerified = true;     // (Optional, if you're still using this flag)
+    employer.cacRejectionReason = ""; // Clear any past rejection reason
+
+    await employer.save();
+
+    res.json({ message: "CAC verified successfully." });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+};

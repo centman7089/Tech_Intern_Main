@@ -150,13 +150,7 @@ const login = async (req, res) => {
       });
     }
 
-    // Check if CAC document is uploaded
-    if (!employer.cacDocument?.url || !employer.cacDocument.description) {
-      return res.status(403).json({
-        msg: "Login blocked. Please upload CAC document and wait for admin verification.",
-        requiresCacVerification: true,
-      });
-    }
+ 
 
     // Check CAC status
     if (employer.cacStatus !== "approved") {

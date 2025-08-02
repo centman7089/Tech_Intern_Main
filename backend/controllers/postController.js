@@ -137,7 +137,13 @@ const getFeedPosts = async (req, res) => {
     const userId = req.params.userId; // Get the userId from route param
 
     const user = await User.findById(userId).select("following");
-    if (!user) return res.status(404).json({ error: "User not found" });
+	  if ( !user ) return res.status( 404 ).json( { error: "User not found" } );
+	  
+	  //to allow only loggedIn user view post
+	  if (req.user._id.toString() !== req.params.userId) {
+			return res.status(403).json({ error: "Access denied" });
+	  }
+
 
     // Get users who follow the current user (i.e., followers)
     const followers = await User.find({ following: userId }).select("_id");
