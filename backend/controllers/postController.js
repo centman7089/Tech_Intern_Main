@@ -133,22 +133,35 @@ const replyToPost = async (req, res) => {
 };
 
 const getFeedPosts = async (req, res) => {
-	try {
-		const userId = req.user._id;
-		const user = await User.findById(userId);
-		if (!user) {
-			return res.status(404).json({ error: "User not found" });
-		}
+  try {
+    const userId = req.params.userId; // Get the userId from route param
 
-		const following = user.following;
+    const user = await User.findById(userId).select("following");
+    if (!user) return res.status(404).json({ error: "User not found" });
 
-		const feedPosts = await Post.find({ postedBy: { $in: following } }).sort({ createdAt: -1 });
+    // Get users who follow the current user (i.e., followers)
+    const followers = await User.find({ following: userId }).select("_id");
 
-		res.status(200).json(feedPosts);
-	} catch (err) {
-		res.status(500).json({ error: err.message });
-	}
+    const followerIds = followers.map((f) => f._id.toString());
+    const followingIds = user.following.map((id) => id.toString());
+
+    // Get users who are mutuals
+    const mutualFollowIds = followingIds.filter((id) => followerIds.includes(id));
+
+    // Include current user
+    const visiblePosterIds = [...mutualFollowIds, userId];
+
+    // Fetch posts from mutuals and self
+    const feedPosts = await Post.find({ postedBy: { $in: visiblePosterIds } })
+      .sort({ createdAt: -1 })
+      .populate("postedBy", "name avatar");
+
+    res.status(200).json(feedPosts);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 };
+
 
 const getUserPosts = async (req, res) => {
 	const { username } = req.params;
