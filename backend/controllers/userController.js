@@ -164,7 +164,7 @@ const login = async (req, res) => {
 		const code = generateCode();
 		user.emailCode = code;
 		user.emailCodeExpires = Date.now() + 10 * 60 * 1000; // 10 mins
-		await user.save();
+	
   
 		// Send verification email
 		await sendEmail(
@@ -172,6 +172,8 @@ const login = async (req, res) => {
 		  "New Verification Code",
 		  `Your new verification code is: ${code}`
 		);
+		  
+		await user.save();
   
 		return res.status(403).json({ 
 		  msg: "Account not verified. A new verification code has been sent to your email.",

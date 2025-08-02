@@ -123,7 +123,41 @@ const storage = new CloudinaryStorage({
   },
 });
 
-const uploadPhoto = multer({ storage, fileFilter });
+const uploadPhoto = multer( { storage, fileFilter } );
+
+const allowedCacTypes = [
+  'application/pdf',
+  'image/jpeg',
+  'image/png'
+];
+
+const cacStorage = new CloudinaryStorage({
+  cloudinary,
+  params: async (req, file) => {
+    return {
+      folder: 'employer-cac-documents',
+      public_id: `${req.params.employerId}-${Date.now()}`, // ✅ FIXED HERE
+      resource_type: 'auto',
+      allowed_formats: ['pdf', 'jpg', 'jpeg', 'png'],
+      transformation: [{ quality: 'auto:best' }]
+    };
+  }
+});
+
+const cacUpload = multer({
+  storage: cacStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+    files: 1
+  },
+  fileFilter: (req, file, cb) => {
+    if (allowedCacTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Invalid file type. Only PDF or image allowed."), false);
+    }
+  }
+});
 
 
-export { resumeUpload, photoUpload, uploadPhoto };
+export { resumeUpload, photoUpload, uploadPhoto, cacUpload };

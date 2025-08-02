@@ -37,10 +37,10 @@ function generateToken(user) {
 
 const router = express.Router();
 
-router.get("/profile/:query", getUserProfile);
+router.get("/profile/:query",protectRoute, getUserProfile);
 router.get("/suggested", protectRoute, getSuggestedUsers);
 
-router.post("/logout", logoutUser);
+router.post("/logout", protectRoute,logoutUser);
 router.post("/follow/:id", protectRoute, followUnFollowUser); // Toggle state(follow/unfollow)
 
 router.patch( "/freeze", protectRoute, freezeAccount );
@@ -90,22 +90,7 @@ const upload = multer({
   router.post('/resume/local', protectRoute, upload.single('resume'), uploadFromLocal);
   
 
-// Google auth routes
-// router.get(
-// 	'/google',
-// 	passport.authenticate('google', {
-// 	  scope: ['profile', 'email']
-// 	})
-//   );
-  
-//   router.get(
-// 	'/google/callback',
-// 	passport.authenticate('google', {
-// 	  failureRedirect: '/login',
-// 	  session: false
-// 	}),
-// 	googleAuthSuccess
-//   );
+
 
 
 // Google
@@ -122,40 +107,6 @@ router.get("/github/callback", passport.authenticate("github", { session: false 
   res.redirect(`${keys.clientURL}/oauth-success?token=${token}`);
 });
 
-
-// // Google
-// router.get(
-// 	"/google",
-// 	passport.authenticate("google", { scope: ["profile", "email"] })
-//   );
-//   router.get("/google/callback", passport.authenticate("google"), issueTokenAndRedirect);
-  
-//   // Facebook
-//   router.get(
-// 	"/facebook",
-// 	passport.authenticate("facebook", { scope: ["email"] })
-//   );
-//   router.get("/facebook/callback", passport.authenticate("facebook"), issueTokenAndRedirect);
-  
-  // GitHub
-//   router.get(
-// 	"/github",
-// 	passport.authenticate("github", { scope: ["user:email"] })
-//   );
-//   router.get("/github/callback", passport.authenticate("github"), issueTokenAndRedirect);
-  
-//   // Verify token and get profile
-//   router.get("/me", (req, res) => {
-// 	const authHeader = req.headers.authorization;
-// 	if (!authHeader) return res.sendStatus(401);
-// 	const token = authHeader.split(" ")[1];
-// 	try {
-// 	  const payload = jwt.verify(token, process.env.JWT_SECRET);
-// 	  res.json(payload);
-// 	} catch {
-// 	  res.sendStatus(401);
-// 	}
-//   });
 
 
 

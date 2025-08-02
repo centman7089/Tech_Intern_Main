@@ -17,9 +17,7 @@ internRouter.post( '/education', protectRoute,addEducation )
 internRouter.get( "/grouped-by-course", protectRoute, getInternsGroupedByCourse );
 internRouter.get( '/by-course/:courseId',protectRoute, getInternsByCourse );
 internRouter.get( "/:id",protectRoute, getUserProfile );
-internRouter.patch( "/photo/:id", protectRoute, uploadPhoto.single( 'photo' ), updateInternProfilePhoto );
+internRouter.patch( "/photo/:id",protectRoute,uploadPhoto.single('photo'),updateInternProfilePhoto );
 internRouter.patch( '/update/:id', protectRoute, updateProfile );
-
-
 
 export default internRouter
