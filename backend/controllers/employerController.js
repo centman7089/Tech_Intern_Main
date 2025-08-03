@@ -130,7 +130,7 @@ const login = async (req, res) => {
       return res.status(400).json({ msg: "Invalid credentials" });
     }
 
-    const isPasswordCorrect = await employer.correctPassword(password); // Use schema method
+    const isPasswordCorrect = await employer.correctPassword(password);
     if (!isPasswordCorrect) {
       return res.status(400).json({ msg: "Invalid password" });
     }
@@ -150,22 +150,8 @@ const login = async (req, res) => {
       });
     }
 
- 
+    // ✅ Skip CAC check entirely
 
-    // Check CAC status
-    if (employer.cacStatus !== "approved") {
-      return res.status(403).json({
-        msg:
-          employer.cacStatus === "rejected"
-            ? "Your CAC was rejected. Please re-upload with valid CAC documents."
-            : "Login blocked. Your CAC document is pending verification by admin.",
-        requiresCacVerification: true,
-        cacStatus: employer.cacStatus,
-        rejectionReason: employer.cacRejectionReason || "",
-      });
-    }
-
-    // Generate token and return success
     const token = generateTokenAndSetCookie(employer._id, res, "employer");
 
     return res.status(200).json({
@@ -174,6 +160,7 @@ const login = async (req, res) => {
       email: employer.email,
       msg: "Login successful",
       isVerified: true,
+      cacStatus: employer.cacStatus,
     });
 
   } catch (error) {
@@ -181,6 +168,7 @@ const login = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
 
 
 const logoutUser = ( req, res ) =>
