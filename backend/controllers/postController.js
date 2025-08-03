@@ -186,7 +186,7 @@ const getUserPosts = async (req, res) => {
     }
 
     // Ensure the requesting user matches the requested ID
-    if (req.user._id.toString() !== userId) {
+    if (req.user?._id.toString() !== userId) {
       return res.status(403).json({ error: "Unauthorized to access posts of this user" });
     }
 
