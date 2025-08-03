@@ -16,6 +16,7 @@ const courseRoute = express.Router();
 // courseRoute.get( '/courses', getAllCourses );
 // courseRoute.get( '/:course', getSkillsByCourse )
 // routes/categoryRoutes.js or courseRoutes.js
+// to get course ID
 courseRoute.get("/by-course/:courseId", getInternsByCourse);
 
 
