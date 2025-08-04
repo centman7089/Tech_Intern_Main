@@ -389,7 +389,7 @@ const verifyResetCode = async (req, res) => {
 };
 
 // Step 3 – change the password with the JWT
- const resetPassword = async (req, res) => {
+const resetPassword = async (req, res) => {
   try {
     const { token, newPassword, confirmPassword } = req.body;
     if (newPassword !== confirmPassword)
@@ -402,9 +402,28 @@ const verifyResetCode = async (req, res) => {
     const employer = await Employer.findById(decoded.employerId);
     if (!employer) return res.status(404).json({ message: "User not found" });
 
-    employer.password = await bcrypt.hash(newPassword, 10);
+    // Check for reused password before hashing
+    const reused = await Promise.any(
+      employer.passwordHistory.map(({ password }) => bcrypt.compare(newPassword, password))
+    ).catch(() => false);
+
+    if (reused) {
+      return res.status(400).json({ message: "Password reused from history" });
+    }
+
+    // Set new password (let mongoose pre-save hook hash it)
+    employer.password = newPassword;
+
+    // Update password history AFTER setting password
+    employer.passwordHistory.push({ password: await bcrypt.hash(newPassword, 10), changedAt: new Date() });
+    if (employer.passwordHistory.length > 5) employer.passwordHistory.shift();
+
+    // Clear reset codes
     employer.emailCode = undefined;
     employer.emailCodeExpires = undefined;
+    employer.resetCode = undefined;
+    employer.resetCodeExpires = undefined;
+
     await employer.save();
 
     res.json({ success: true, message: "Password updated" });
@@ -414,6 +433,7 @@ const verifyResetCode = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 const uploadCacDocument = async (req, res) => {
   try {

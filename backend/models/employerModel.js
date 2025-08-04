@@ -85,6 +85,7 @@ EmployerSchema.pre("save", async function (next) {
   next();
 });
 
+
 // Compare password method
 EmployerSchema.methods.correctPassword = async function (inputPassword) {
   return await bcrypt.compare(inputPassword, this.password);
