@@ -4,6 +4,7 @@ import Post from "../models/postModel.js";
 import User from "../models/userModel.js";
 import { v2 as cloudinary } from "cloudinary";
 import mongoose from "mongoose";
+import InternProfile from "../models/internProfile.js";
 
 
 const createPost = async (req, res) => {
@@ -142,39 +143,52 @@ const replyToPost = async (req, res) => {
 
 const getFeedPosts = async (req, res) => {
   try {
-    const userId = req.params.userId; // Get the userId from route param
+    const userId = req.params.userId;
 
     const user = await User.findById(userId).select("following");
-	  if ( !user ) return res.status( 404 ).json( { error: "User not found" } );
-	  
-	  //to allow only loggedIn user view post
-	  if (req.user._id.toString() !== req.params.userId) {
-			return res.status(403).json({ error: "Access denied" });
-	  }
+    if (!user) return res.status(404).json({ error: "User not found" });
 
+    if (req.user._id.toString() !== userId) {
+      return res.status(403).json({ error: "Access denied" });
+    }
 
-    // Get users who follow the current user (i.e., followers)
     const followers = await User.find({ following: userId }).select("_id");
 
     const followerIds = followers.map((f) => f._id.toString());
     const followingIds = user.following.map((id) => id.toString());
 
-    // Get users who are mutuals
-    const mutualFollowIds = followingIds.filter((id) => followerIds.includes(id));
+    const mutualFollowIds = followingIds.filter((id) =>
+      followerIds.includes(id)
+    );
 
-    // Include current user
     const visiblePosterIds = [...mutualFollowIds, userId];
 
-    // Fetch posts from mutuals and self
     const feedPosts = await Post.find({ postedBy: { $in: visiblePosterIds } })
       .sort({ createdAt: -1 })
-      .populate("postedBy", "name avatar");
+      .populate({
+        path: "postedBy",
+        select: "firstName lastName profile",
+        populate: {
+          path: "profile",
+          model: "InternProfile",
+          select: "profilePic selectedCourses",
+          populate: {
+            path: "selectedCourses",
+            model: "Course",
+            select: "name"
+          }
+        }
+      });
 
     res.status(200).json(feedPosts);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
+
+
+
+
 
 
 const getUserPosts = async (req, res) => {
@@ -195,7 +209,20 @@ const getUserPosts = async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    const posts = await Post.find({ postedBy: userId }).sort({ createdAt: -1 });
+    const posts = await Post.find({ postedBy: userId }).sort({ createdAt: -1 }).populate({
+        path: "postedBy",
+        select: "firstName lastName profile",
+        populate: {
+          path: "profile",
+          model: "InternProfile",
+          select: "profilePic selectedCourses",
+          populate: {
+            path: "selectedCourses",
+            model: "Course",
+            select: "name"
+          }
+        }
+      });
 
     res.status(200).json(posts);
   } catch (error) {
