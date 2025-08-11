@@ -33,114 +33,82 @@ const formatAdminResponse = (admin) => ({
   isVerified: admin.isVerified || false,
 });
 
-export const createAdmin = async ( req, res ) => {
-	try
-	{
-		const {firstName, lastName, email, password, phone, country, role } = req.body;
-		const adminExists = await Admin.findOne( { email } );
-		if ( !firstName || !lastName || !email || !password || !phone || !country)
-		{
-			return res.status( 404 ).json( { message: "All fields are required" } );
-		}
+// Auth Controllers
+// ========================
+export const createAdmin = async (req, res) => {
+  try {
+    const { firstName, lastName, email, password, phone, country, role } = req.body;
 
+    if (!firstName || !lastName || !email || !password || !phone || !country) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
 
-		if ( adminExists )
-		{
-			return res.status( 400 ).json( { error: "Admin already exists" } );
-		}
+    const adminExists = await Admin.findOne({ email });
+    if (adminExists) {
+      return res.status(400).json({ error: "Admin already exists" });
+    }
 
+    const code = generateCode();
+    const admin = new Admin({
+      firstName,
+      lastName,
+      email,
+      password, // pre-save hook will hash
+      phone,
+      country,
+      role,
+      emailCode: code,
+      emailCodeExpires: Date.now() + 10 * 60 * 1000, // 10 mins
+      passwordHistory: [{ password, changedAt: new Date() }],
+      isVerified: false,
+    });
 
-		const code = generateCode();
+    await admin.save();
+    await sendEmail(email, "Verify your email", `Your verification code is: ${code}`);
 
-		const admin = await Admin.create( {
-			firstName,
-			lastName,
-			email,
-			password,
-			phone,
-			country,
-			role,
-			emailCode: code,
-			emailCodeExpires: Date.now() + 10 * 60 * 1000,// 10 mins
-			passwordHistory: [ { password, changedAt: new Date() } ],
-			isVerified: false
-		} );
+    const token = generateTokenAndSetCookie(admin._id, res, "admin");
 
-
-		await sendEmail( email, "Verify your email", `Your verification code is: ${ code }` );
-		const token = generateTokenAndSetCookie( admin._id, res, "admin" );
-		await admin.save()
-
-		res.status( 201 ).json( {
-			token,
-		  _id: admin._id,
-      firstName: admin.firstName || "",
-      lastName: admin.lastName || "",
-      email: admin.email || "",
-      phone: admin.phone || "",
-      country: admin.country || "",
-      role: admin.role || "",
-      profilePic: admin.profilePic || "",
-      isVerified: admin.isVerified || false,
-			msg: "Admin registered . Verification code sent to email.",
-		} );
-	} catch ( err )
-	{
-		console.log( err );
-
-		res.status( 500 ).json( { error: err.message } );
-		console.log( "Error in registering Employer: ", err.message );
-		res.status( 500 ).json( { msg: err.message } );
-	}
-}
-
+    res.status(201).json({
+      token,
+      ...formatAdminResponse(admin),
+      msg: "Admin registered. Verification code sent to email.",
+    });
+  } catch (err) {
+    console.error("Error registering admin:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
 
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
     const admin = await Admin.findOne({ email });
 
-    if (!admin) {
+    if (!admin || !(await admin.correctPassword(password))) {
       return res.status(400).json({ msg: "Invalid credentials" });
     }
 
-    const isPasswordCorrect = await admin.correctPassword(password); // Use schema method
-    if (!isPasswordCorrect) {
-      return res.status(400).json({ msg: "Invalid password" });
-    }
-
-    // Check email verification
     if (!admin.isVerified) {
       const code = generateCode();
       admin.emailCode = code;
       admin.emailCodeExpires = Date.now() + 10 * 60 * 1000;
       await admin.save();
-
       await sendEmail(email, "Verification Required", `Your new code: ${code}`);
-
       return res.status(403).json({
         msg: "Account not verified. New verification code sent.",
         isVerified: false,
       });
     }
 
- 
-
-
-
-    // Generate token and return success
     const token = generateTokenAndSetCookie(admin._id, res, "admin");
-
-    return res.status(200).json({
+    res.status(200).json({
       token,
-      _id: admin._id,
-      email: admin.email,
+      ...formatAdminResponse(admin),
       msg: "Login successful",
       isVerified: true,
     });
-
   } catch (error) {
-    console.error("Error in loginAdmin: ", error.message);
+    console.error("Error in loginAdmin:", error.message);
     res.status(500).json({ error: error.message });
   }
 };
@@ -279,24 +247,25 @@ export const changePassword = async (req, res) => {
     const adminId = req.admin._id;
     const { currentPassword, newPassword, confirmNewPassword } = req.body;
 
-    if (newPassword !== confirmNewPassword)
+    if (newPassword !== confirmNewPassword) {
       return res.status(400).json({ msg: "Passwords do not match" });
+    }
 
     const admin = await Admin.findById(adminId);
-    if (!admin) return res.status(404).json({ msg: "admin not found" });
+    if (!admin) return res.status(404).json({ msg: "Admin not found" });
 
-    const isMatch = await bcrypt.compare(currentPassword, admin.password);
-    if (!isMatch) return res.status(400).json({ msg: "Incorrect current password" });
+    if (!(await admin.correctPassword(currentPassword))) {
+      return res.status(400).json({ msg: "Incorrect current password" });
+    }
 
+    // Prevent reuse
     const reused = await Promise.any(
-      user.passwordHistory.map(({ password }) => bcrypt.compare(newPassword, password))
+      admin.passwordHistory.map(({ password }) => admin.correctPassword(newPassword))
     ).catch(() => false);
 
     if (reused) return res.status(400).json({ msg: "Password reused from history" });
 
-    const hashed = await bcrypt.hash(newPassword, 10);
-
-    admin.password = hashed;
+    admin.password = newPassword; // Let pre-save hook hash
     admin.passwordHistory.push({ password: admin.password, changedAt: new Date() });
     if (admin.passwordHistory.length > 5) admin.passwordHistory.shift();
 
@@ -304,6 +273,35 @@ export const changePassword = async (req, res) => {
     res.json({ msg: "Password changed successfully" });
   } catch (err) {
     res.status(500).json({ msg: "Server error" });
+  }
+};
+
+export const resetPassword = async (req, res) => {
+  try {
+    const { token, newPassword, confirmPassword } = req.body;
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ message: "Passwords do not match" });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.purpose !== "password_reset") {
+      return res.status(400).json({ message: "Invalid token" });
+    }
+
+    const admin = await Admin.findById(decoded.adminId);
+    if (!admin) return res.status(404).json({ message: "User not found" });
+
+    admin.password = newPassword; // Let pre-save hook hash
+    admin.emailCode = undefined;
+    admin.emailCodeExpires = undefined;
+    await admin.save();
+
+    res.json({ success: true, message: "Password updated" });
+  } catch (err) {
+    if (err.name === "TokenExpiredError") {
+      return res.status(400).json({ message: "Token expired" });
+    }
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -342,31 +340,6 @@ export const verifyResetCode = async (req, res) => {
   }
 };
 
-export const resetPassword = async (req, res) => {
-  try {
-    const { token, newPassword, confirmPassword } = req.body;
-    if (newPassword !== confirmPassword)
-      return res.status(400).json({ message: "Passwords do not match" });
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    if (decoded.purpose !== "password_reset")
-      return res.status(400).json({ message: "Invalid token" });
-
-    const admin = await Admin.findById(decoded.adminId);
-    if (!admin) return res.status(404).json({ message: "User not found" });
-
-    admin.password = await bcrypt.hash(newPassword, 10);
-    admin.emailCode = undefined;
-    admin.emailCodeExpires = undefined;
-    await admin.save();
-
-    res.json({ success: true, message: "Password updated" });
-  } catch (err) {
-    if (err.name === "TokenExpiredError")
-      return res.status(400).json({ message: "Token expired" });
-    res.status(500).json({ message: "Server error" });
-  }
-};
 
 export const getAdminUser = async (req, res) => {
   try {
@@ -382,15 +355,14 @@ export const verifyCac = async (req, res) => {
     const employer = await Employer.findById(req.params.employerId);
     if (!employer) return res.status(404).json({ error: "Employer not found" });
 
-    employer.cacStatus = "approved"; // ✅ Mark CAC as approved
-    employer.cacVerified = true;     // (Optional, if you're still using this flag)
-    employer.cacRejectionReason = ""; // Clear any past rejection reason
+    employer.cacStatus = "approved";
+    employer.cacVerified = true;
+    employer.cacRejectionReason = "";
 
     await employer.save();
-
     res.json({ message: "CAC verified successfully." });
   } catch (err) {
-    console.error(err);
+    console.error("verifyCac error:", err);
     res.status(500).json({ error: "Server error" });
   }
 };
