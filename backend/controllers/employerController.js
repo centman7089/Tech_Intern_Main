@@ -322,33 +322,52 @@ const changePassword = async (req, res) => {
     const employerId = req.employer._id;
     const { currentPassword, newPassword, confirmNewPassword } = req.body;
 
-    if (newPassword !== confirmNewPassword)
+    if (newPassword !== confirmNewPassword) {
       return res.status(400).json({ msg: "Passwords do not match" });
+    }
 
     const employer = await Employer.findById(employerId);
-    if (!employer) return res.status(404).json({ msg: "Employer not found" });
+    if (!employer) {
+      return res.status(404).json({ msg: "Employer not found" });
+    }
 
     const isMatch = await bcrypt.compare(currentPassword, employer.password);
-    if (!isMatch) return res.status(400).json({ msg: "Incorrect current password" });
+    if (!isMatch) {
+      return res.status(400).json({ msg: "Incorrect current password" });
+    }
 
+    // Prevent reusing old passwords
     const reused = await Promise.any(
-      user.passwordHistory.map(({ password }) => bcrypt.compare(newPassword, password))
+      employer.passwordHistory.map(({ password }) => bcrypt.compare(newPassword, password))
     ).catch(() => false);
 
-    if (reused) return res.status(400).json({ msg: "Password reused from history" });
+    if (reused) {
+      return res.status(400).json({ msg: "Password reused from history" });
+    }
 
     const hashed = await bcrypt.hash(newPassword, 10);
 
-    employer.password = hashed;
-    employer.passwordHistory.push({ password: employer.password, changedAt: new Date() });
-    if (employer.passwordHistory.length > 5) employer.passwordHistory.shift();
+    // Save old password into history before updating
+    employer.passwordHistory.push({
+      password: employer.password,
+      changedAt: new Date()
+    });
 
+    // Keep last 5 passwords in history
+    if (employer.passwordHistory.length > 5) {
+      employer.passwordHistory.shift();
+    }
+
+    employer.password = hashed;
     await employer.save();
+
     res.json({ msg: "Password changed successfully" });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ msg: "Server error" });
   }
 };
+
 
 
 
