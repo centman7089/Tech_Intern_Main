@@ -11,10 +11,11 @@ const protectEmployer = async (req, res, next) => {
   ) {
     try {
       token = req.headers.authorization.split(" ")[1];
+
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-      // ✅ Use the correct key from your JWT payload
-      const employerId = decoded.employer; // <-- This matches your token
+      // ✅ Consistent property name from JWT payload
+      const employerId = decoded.employerId || decoded.employer || decoded._id;
       if (!employerId) {
         return res.status(401).json({ msg: "Invalid token: employer ID missing" });
       }
@@ -27,6 +28,7 @@ const protectEmployer = async (req, res, next) => {
       req.employer = employer;
       next();
     } catch (error) {
+      console.error("JWT error:", error);
       return res.status(401).json({ msg: "Invalid or expired token" });
     }
   } else {

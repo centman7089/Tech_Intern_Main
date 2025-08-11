@@ -121,53 +121,6 @@ const register = async ( req, res ) =>
 
 
 
-const login = async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    const employer = await Employer.findOne({ email });
-
-    if (!employer) {
-      return res.status(400).json({ msg: "Invalid credentials" });
-    }
-
-    const isPasswordCorrect = await employer.correctPassword(password);
-    if (!isPasswordCorrect) {
-      return res.status(400).json({ msg: "Invalid password" });
-    }
-
-    // Check email verification
-    if (!employer.isVerified) {
-      const code = generateCode();
-      employer.emailCode = code;
-      employer.emailCodeExpires = Date.now() + 10 * 60 * 1000;
-      await employer.save();
-
-      await sendEmail(email, "Verification Required", `Your new code: ${code}`);
-
-      return res.status(403).json({
-        msg: "Account not verified. New verification code sent.",
-        isVerified: false,
-      });
-    }
-
-    // ✅ Skip CAC check entirely
-
-    const token = generateTokenAndSetCookie(employer._id, res, "employer");
-
-    return res.status(200).json({
-      token,
-      _id: employer._id,
-      email: employer.email,
-      msg: "Login successful",
-      isVerified: true,
-      cacStatus: employer.cacStatus,
-    });
-
-  } catch (error) {
-    console.error("Error in loginEmployer: ", error.message);
-    res.status(500).json({ error: error.message });
-  }
-};
 
 
 
@@ -185,57 +138,7 @@ const logoutUser = ( req, res ) =>
 };
 
 
-const updateUser = async ( req, res ) =>
-{
-	const { companyName, email, phone, location} = req.body;
-	let { logo } = req.body;
 
-	const userId = req.employer._id;
-	try
-	{
-		let employer = await Employer.findById( employerId );
-		if ( !employer ) return res.status( 400 ).json( { error: "Employer not found" } );
-
-		if ( req.params.id !== employerId.toString() )
-			return res.status( 400 ).json( { error: "You cannot update other employer's profile" } );
-
-		if ( password )
-		{
-			const salt = await bcrypt.genSalt( 10 );
-			const hashedPassword = await bcrypt.hash( password, salt );
-			employer.password = hashedPassword;
-		}
-
-		if ( logo )
-		{
-			if ( employer.logo )
-			{
-				await cloudinary.uploader.destroy( employer.logo.split( "/" ).pop().split( "." )[ 0 ] );
-			}
-
-			const uploadedResponse = await cloudinary.uploader.upload( logo );
-			logo = uploadedResponse.secure_url;
-		}
-
-		employer.companyName = companyName || employer.companyName;
-		employer.email = email || employer.email;
-		employer.description = description || employer.description;
-		employer.logo = logo || employer.logo;
-
-		employer = await employer.save();
-
-
-
-		// password should be null in response
-		employer.password = null;
-
-		res.status( 200 ).json( employer );
-	} catch ( err )
-	{
-		res.status( 500 ).json( { error: err.message } );
-		console.log( "Error in update Employer: ", err.message );
-	}
-};
 
 
 
@@ -317,54 +220,202 @@ const resendCode = async ( req, res ) =>
 	}
 };
 
+// CHANGE PASSWORD (logged in employer)
 const changePassword = async (req, res) => {
   try {
     const employerId = req.employer._id;
     const { currentPassword, newPassword, confirmNewPassword } = req.body;
+
+    if (!currentPassword || !newPassword || !confirmNewPassword) {
+      return res.status(400).json({ msg: "All fields are required" });
+    }
 
     if (newPassword !== confirmNewPassword) {
       return res.status(400).json({ msg: "Passwords do not match" });
     }
 
     const employer = await Employer.findById(employerId);
-    if (!employer) {
-      return res.status(404).json({ msg: "Employer not found" });
-    }
+    if (!employer) return res.status(404).json({ msg: "Employer not found" });
 
+    // Verify current password
     const isMatch = await bcrypt.compare(currentPassword, employer.password);
-    if (!isMatch) {
-      return res.status(400).json({ msg: "Incorrect current password" });
+    if (!isMatch) return res.status(400).json({ msg: "Incorrect current password" });
+
+    // Prevent setting same as current
+    if (await bcrypt.compare(newPassword, employer.password)) {
+      return res.status(400).json({ msg: "New password cannot be the same as the old password" });
     }
 
     // Prevent reusing old passwords
-    const reused = await Promise.any(
-      employer.passwordHistory.map(({ password }) => bcrypt.compare(newPassword, password))
-    ).catch(() => false);
-
-    if (reused) {
-      return res.status(400).json({ msg: "Password reused from history" });
+    for (const entry of employer.passwordHistory || []) {
+      if (await bcrypt.compare(newPassword, entry.password)) {
+        return res.status(400).json({ msg: "You have already used this password before" });
+      }
     }
 
-    const hashed = await bcrypt.hash(newPassword, 10);
-
-    // Save old password into history before updating
+    // Store old password in history
+    employer.passwordHistory = employer.passwordHistory || [];
     employer.passwordHistory.push({
       password: employer.password,
-      changedAt: new Date()
+      changedAt: new Date(),
     });
-
-    // Keep last 5 passwords in history
     if (employer.passwordHistory.length > 5) {
       employer.passwordHistory.shift();
     }
 
-    employer.password = hashed;
+    // Assign new password in plain text — pre-save will hash it
+    employer.password = newPassword;
     await employer.save();
 
     res.json({ msg: "Password changed successfully" });
   } catch (err) {
-    console.error(err);
+    console.error("changePassword error:", err);
     res.status(500).json({ msg: "Server error" });
+  }
+};
+
+const resetPassword = async (req, res) => {
+  try {
+    const { token, newPassword, confirmPassword } = req.body;
+    if (!token || !newPassword || !confirmPassword) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ message: "Passwords do not match" });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.purpose !== "password_reset") {
+      return res.status(400).json({ message: "Invalid token" });
+    }
+
+    const employer = await Employer.findById(decoded.employerId);
+    if (!employer) return res.status(404).json({ message: "User not found" });
+
+    // Prevent reusing current password
+    if (await bcrypt.compare(newPassword, employer.password)) {
+      return res.status(400).json({ message: "New password cannot be the same as the old password" });
+    }
+
+    // Prevent reusing passwords from history
+    for (const entry of employer.passwordHistory || []) {
+      if (await bcrypt.compare(newPassword, entry.password)) {
+        return res.status(400).json({ message: "You have already used this password before" });
+      }
+    }
+
+    // Save current hashed password into history
+    employer.passwordHistory = employer.passwordHistory || [];
+    employer.passwordHistory.push({
+      password: employer.password,
+      changedAt: new Date(),
+    });
+    if (employer.passwordHistory.length > 5) {
+      employer.passwordHistory.shift();
+    }
+
+    // Set new password in plain text — pre-save hook hashes
+    employer.password = newPassword;
+
+    // Clear reset tokens
+    employer.emailCode = undefined;
+    employer.emailCodeExpires = undefined;
+    employer.resetCode = undefined;
+    employer.resetCodeExpires = undefined;
+
+    await employer.save();
+
+    res.json({ success: true, message: "Password updated" });
+  } catch (err) {
+    if (err.name === "TokenExpiredError") {
+      return res.status(400).json({ message: "Token expired" });
+    }
+    console.error("resetPassword error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+const login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const employer = await Employer.findOne({ email });
+
+    if (!employer) {
+      return res.status(400).json({ msg: "Invalid credentials" });
+    }
+
+    const isPasswordCorrect = await employer.correctPassword(password);
+    if (!isPasswordCorrect) {
+      return res.status(400).json({ msg: "Invalid password" });
+    }
+
+    // Email verification check
+    if (!employer.isVerified) {
+      const code = generateCode();
+      employer.emailCode = code;
+      employer.emailCodeExpires = Date.now() + 10 * 60 * 1000;
+      await employer.save();
+      await sendEmail(email, "Verification Required", `Your new code: ${code}`);
+
+      return res.status(403).json({
+        msg: "Account not verified. New verification code sent.",
+        isVerified: false,
+      });
+    }
+
+    const token = generateTokenAndSetCookie(employer._id, res, "employer");
+
+    return res.status(200).json({
+      token,
+      _id: employer._id,
+      email: employer.email,
+      msg: "Login successful",
+      isVerified: true,
+      cacStatus: employer.cacStatus,
+    });
+  } catch (error) {
+    console.error("Error in loginEmployer:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const updateUser = async (req, res) => {
+  const { companyName, email, phone, location, logo, description } = req.body;
+  const employerId = req.employer._id;
+
+  try {
+    let employer = await Employer.findById(employerId);
+    if (!employer) return res.status(404).json({ error: "Employer not found" });
+
+    if (req.params.id !== employerId.toString()) {
+      return res.status(403).json({ error: "You cannot update another employer's profile" });
+    }
+
+    // Handle logo upload
+    if (logo) {
+      if (employer.logo) {
+        await cloudinary.uploader.destroy(employer.logo.split("/").pop().split(".")[0]);
+      }
+      const uploadedResponse = await cloudinary.uploader.upload(logo);
+      employer.logo = uploadedResponse.secure_url;
+    }
+
+    employer.companyName = companyName || employer.companyName;
+    employer.email = email || employer.email;
+    employer.phone = phone || employer.phone;
+    employer.location = location || employer.location;
+    employer.description = description || employer.description;
+
+    await employer.save();
+
+    // remove password from response
+    employer.password = undefined;
+
+    res.status(200).json(employer);
+  } catch (err) {
+    console.error("updateUser error:", err);
+    res.status(500).json({ error: "Server error" });
   }
 };
 
@@ -408,50 +459,8 @@ const verifyResetCode = async (req, res) => {
 };
 
 // Step 3 – change the password with the JWT
-const resetPassword = async (req, res) => {
-  try {
-    const { token, newPassword, confirmPassword } = req.body;
-    if (newPassword !== confirmPassword)
-      return res.status(400).json({ message: "Passwords do not match" });
+// RESET PASSWORD (via reset token produced after verifyResetCode)
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    if (decoded.purpose !== "password_reset")
-      return res.status(400).json({ message: "Invalid token" });
-
-    const employer = await Employer.findById(decoded.employerId);
-    if (!employer) return res.status(404).json({ message: "User not found" });
-
-    // Check for reused password before hashing
-    const reused = await Promise.any(
-      employer.passwordHistory.map(({ password }) => bcrypt.compare(newPassword, password))
-    ).catch(() => false);
-
-    if (reused) {
-      return res.status(400).json({ message: "Password reused from history" });
-    }
-
-    // Set new password (let mongoose pre-save hook hash it)
-    employer.password = newPassword;
-
-    // Update password history AFTER setting password
-    employer.passwordHistory.push({ password: await bcrypt.hash(newPassword, 10), changedAt: new Date() });
-    if (employer.passwordHistory.length > 5) employer.passwordHistory.shift();
-
-    // Clear reset codes
-    employer.emailCode = undefined;
-    employer.emailCodeExpires = undefined;
-    employer.resetCode = undefined;
-    employer.resetCodeExpires = undefined;
-
-    await employer.save();
-
-    res.json({ success: true, message: "Password updated" });
-  } catch (err) {
-    if (err.name === "TokenExpiredError")
-      return res.status(400).json({ message: "Token expired" });
-    res.status(500).json({ message: "Server error" });
-  }
-};
 
 
 const uploadCacDocument = async (req, res) => {
