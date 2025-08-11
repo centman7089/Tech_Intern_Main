@@ -420,56 +420,57 @@ const verifyPasswordResetCode = async (req, res) => {
   // Forgot Password
 
   // Change Password (Requires token)
-  const changePassword = async (req, res) => {
-	try {
-	  const userId = req.user.id;
-	  const { currentPassword, newPassword, confirmNewPassword } = req.body;
-  
-	  if (newPassword !== confirmNewPassword) {
-		return res.status(400).json({ msg: "New passwords do not match" });
-	  }
-  
-	  const user = await User.findById(userId);
-	  if (!user) return res.status(404).json({ msg: "User not found" });
-  
-	  const isMatch = await bcrypt.compare(currentPassword, user.password);
-	  if (!isMatch) return res.status(400).json({ msg: "Current password is incorrect" });
-  
-	  // Check if newPassword is same as current password
-	  const isSame = await bcrypt.compare(newPassword, user.password);
-	  if (isSame) return res.status(400).json({ msg: "New password cannot be the same as the old password" });
-  
-	  // Check password history
-	  for (let entry of user.passwordHistory || []) {
-		const reused = await bcrypt.compare(newPassword, entry.password);
-		if (reused) {
-		  return res.status(400).json({ msg: "You have already used this password before" });
-		}
-	  }
-  
-	  // Hash new password
-	  const hashedPassword = await bcrypt.hash(newPassword, 10);
-  
-	  // Update password and push current password to history
-	  const updatedHistory = user.passwordHistory || [];
-	  updatedHistory.push({ password: user.password, changedAt: new Date() });
-  
-	  // Keep only last 5 passwords
-	  while (updatedHistory.length > 5) {
-		updatedHistory.shift();
-	  }
-  
-	  user.password = hashedPassword;
-	  user.passwordHistory = updatedHistory;
-	  await user.save();
-  
-	  res.json({ msg: "Password changed successfully" });
-  
-	} catch (err) {
-	  console.error(err);
-	  res.status(500).json({ msg: "Server error" });
-	}
-  };
+const changePassword = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { currentPassword, newPassword, confirmNewPassword } = req.body;
+
+    if (newPassword !== confirmNewPassword) {
+      return res.status(400).json({ msg: "New passwords do not match" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ msg: "User not found" });
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ msg: "Current password is incorrect" });
+    }
+
+    // Check if same as current
+    const isSame = await bcrypt.compare(newPassword, user.password);
+    if (isSame) {
+      return res.status(400).json({ msg: "New password cannot be the same as the old password" });
+    }
+
+    // Check password history
+    for (let entry of user.passwordHistory || []) {
+      const reused = await bcrypt.compare(newPassword, entry.password);
+      if (reused) {
+        return res.status(400).json({ msg: "You have already used this password before" });
+      }
+    }
+
+    // Save old password in history
+    const updatedHistory = user.passwordHistory || [];
+    updatedHistory.push({ password: user.password, changedAt: new Date() });
+    while (updatedHistory.length > 5) {
+      updatedHistory.shift();
+    }
+
+    // Set new plain password — let pre("save") hash it
+    user.password = newPassword;
+    user.passwordHistory = updatedHistory;
+
+    await user.save();
+
+    res.json({ msg: "Password changed successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "Server error" });
+  }
+};
+
 
 
   
