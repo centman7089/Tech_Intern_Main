@@ -4,7 +4,7 @@ import express from "express";
 import protectEmployer from "../middlewares/protectEmployer.js";
 import auth from "../middlewares/authMiddleware.js";
 import { resumeUpload, photoUpload, cacUpload } from "../middlewares/upload.js";
-import { logoutUser,updateUser,register,verifyEmail,login,forgotPassword,resetPassword,changePassword,resendCode, getEmployerProfile, uploadCacDocument, verifyResetCode } from "../controllers/employerController.js";
+import { logoutUser,updateUser,register,verifyEmail,login,forgotPassword,resetPassword,changePassword,resendCode, getEmployerProfile, uploadCacDocument, verifyResetCode,createHireRequestWithMatches } from "../controllers/employerController.js";
 
 const EmployerRouter = express.Router();
 
@@ -19,6 +19,7 @@ EmployerRouter.post("/verify-reset-code", verifyResetCode);
 EmployerRouter.post("/forgot-password", forgotPassword);
 EmployerRouter.post("/reset-password", resetPassword);
 EmployerRouter.post( "/change-password", protectEmployer, changePassword );
+EmployerRouter.post( "/hire-requests/:employerId", protectEmployer, createHireRequestWithMatches );
 EmployerRouter.put( "/update/:id", protectEmployer, updateUser );
 EmployerRouter.get( "/profile/:query", getEmployerProfile );
 EmployerRouter.post(

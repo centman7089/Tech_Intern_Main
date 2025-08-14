@@ -14,6 +14,10 @@ import axios from "axios";
 // const fs = require( 'fs' ).promises; // Import the promises version of fs
 import fs from 'fs';
 import { promises as fsp } from 'fs'; // for promise-based operations
+// controllers/hireRequestController.js
+import HireRequest from "../models/hireModel.js";
+import InternProfile from "../models/InternProfile.js";
+import Course from "../models/Course.js";
 
 
 
@@ -508,6 +512,87 @@ const uploadCacDocument = async (req, res) => {
 
 
 
+// Utility: escape regex specials for exact, case-insensitive name match
+const escapeRegex = (str = "") => String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const createHireRequestWithMatches = async (req, res) => {
+  try {
+    const { employerId } = req.params;
+
+    // make sure the route is used by the same logged-in employer
+    if (!req.employer || String(req.employer._id) !== String(employerId)) {
+      return res.status(403).json({ message: "Unauthorized employer" });
+    }
+
+    let {
+      selectedCourse, // NAME
+      workType,
+      location,
+      duration,
+      paymentType,
+      paymentAmount,
+      additionalInfo,
+    } = req.body;
+
+    if (!selectedCourse || !workType) {
+      return res.status(400).json({ message: "selectedCourse and workType are required" });
+    }
+
+    // normalize workType to lowercase to match InternProfile.workType enum style
+    workType = String(workType).trim().toLowerCase();
+
+    // 1) Find Course by NAME (exact, case-insensitive)
+    const course = await Course
+      .findOne({ name: { $regex: `^${escapeRegex(selectedCourse)}$`, $options: "i" } })
+      .select("_id name");
+
+    if (!course) {
+      return res.status(400).json({ message: `Course not found: ${selectedCourse}` });
+    }
+
+    // 2) Find all matching interns: selectedCourses contains course._id AND workType matches
+    const matchedInterns = await InternProfile.find({
+      selectedCourses: course._id,   // array contains this id
+      workType: workType,            // exact match
+    })
+      .populate("user", "firstName lastName email profilePic")
+      .populate("selectedCourses", "name")
+      .lean();
+
+    // 3) Create hire request (store course id, but we will return the name)
+    const hireRequestDoc = await HireRequest.create({
+      employerId,
+      selectedCourse: course._id,
+      workType,
+      location,
+      duration,
+      paymentType,   // left flexible in schema
+      paymentAmount,
+      additionalInfo,
+      interns: matchedInterns.map((p) => p._id),
+    });
+
+    // 4) Shape response so selectedCourse is NAME in the payload
+    const hireRequest = {
+      ...hireRequestDoc.toObject(),
+      selectedCourse: course.name,
+    };
+
+    return res.status(201).json({
+      message: "Hire request created successfully",
+      hireRequest,
+      matchedInterns,
+    });
+  } catch (error) {
+    console.error("Error creating hire request:", error);
+    res.status(500).json({ message: "Server Error", error: error.message });
+  }
+};
+
+
+
+
+
 
 
 
@@ -525,6 +610,7 @@ export
 	forgotPassword,
 	resetPassword,
 	changePassword,
-	uploadCacDocument
+  uploadCacDocument,
+  createHireRequestWithMatches
 
 };
