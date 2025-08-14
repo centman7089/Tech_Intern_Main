@@ -16,7 +16,7 @@ import fs from 'fs';
 import { promises as fsp } from 'fs'; // for promise-based operations
 // controllers/hireRequestController.js
 import HireRequest from "../models/hireModel.js";
-import InternProfile from "../models/InternProfile.js";
+import InternProfile from "../models/internProfile.js";
 import Course from "../models/Course.js";
 
 
