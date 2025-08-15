@@ -557,6 +557,7 @@ const createHireRequestWithMatches = async (req, res) => {
     })
       .populate("user", "firstName lastName email profilePic")
       .populate("selectedCourses", "name")
+      .populate("selectedSkills", "name")
       .lean();
 
     // 3) Create hire request (store course id, but we will return the name)
