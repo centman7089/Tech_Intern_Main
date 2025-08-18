@@ -366,3 +366,29 @@ export const verifyCac = async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 };
+
+
+export const rejectCac = async (req, res) => {
+  try {
+    const { reason } = req.body; // rejection reason from admin
+    const employer = await Employer.findById(req.params.employerId);
+
+    if (!employer) {
+      return res.status(404).json({ error: "Employer not found" });
+    }
+
+    employer.cacStatus = "rejected";
+    employer.cacVerified = false;
+    employer.cacRejectionReason = reason || "No reason provided";
+
+    await employer.save();
+
+    res.status(200).json({
+      message: "CAC rejected successfully",
+      employer,
+    });
+  } catch (err) {
+    console.error("rejectCac error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+};

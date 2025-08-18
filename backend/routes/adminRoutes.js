@@ -1,6 +1,6 @@
 // @ts-nocheck
 import express from "express";
-import { changePassword, createAdmin, forgotPassword, getAdminUser, getUserProfile, login, logoutUser, resendCode, resetPassword, updateUser, verifyCac, verifyEmail, verifyResetCode } from "../controllers/adminController.js";
+import { changePassword, createAdmin, forgotPassword, getAdminUser, getUserProfile, login, logoutUser, resendCode, resetPassword, updateUser, verifyCac, verifyEmail, verifyResetCode, rejectCac } from "../controllers/adminController.js";
 import { authorizeRoles, protectAdmin } from "../middlewares/adminAuth.js";
 
 
@@ -21,8 +21,10 @@ adminRoute.get( '/admin-user', protectAdmin,getAdminUser )
 
 adminRoute.patch( "/update/:id", protectAdmin,updateUser );
 
-adminRoute.put('/verify-cac/:employerId',protectAdmin, authorizeRoles('superadmin'),verifyCac );
+adminRoute.patch('/verify-cac/:employerId',protectAdmin, authorizeRoles('superadmin'),verifyCac );
 // adminRoute.put('/verify-cac/:employerId',protectAdmin, authorizeRoles('admin','superadmin'),verifyCac );
+// Reject CAC
+adminRoute.patch("/reject-cac/:employerId",protectAdmin, authorizeRoles('superadmin'), rejectCac);
 
 
 

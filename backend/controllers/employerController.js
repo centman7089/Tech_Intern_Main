@@ -496,19 +496,20 @@ const uploadCacDocument = async (req, res) => {
     };
     employer.cacDescription = description;
     employer.cacVerified = false;
-    employer.cacStatus = "pending";
+    employer.cacStatus = "awaiting approval";   // 👈 instead of "pending"
     employer.cacRejectionReason = "";
 
     await employer.save();
 
     res.status(200).json({
-      message: "CAC uploaded successfully. Awaiting admin verification.",
+      message: "CAC uploaded successfully. Awaiting admin approval.",
     });
   } catch (err) {
     console.error("Error uploading CAC: ", err);
     res.status(500).json({ error: "Server error" });
   }
 };
+
 
 
 

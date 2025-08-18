@@ -30,11 +30,11 @@ const EmployerSchema = new mongoose.Schema({
   },
   cacDescription: { type: String, default: "" },
   cacVerified: { type: Boolean, default: false },
-  cacStatus: {
-    type: String,
-    enum: ["pending", "approved", "rejected"],
-    default: "pending"
-  },
+cacStatus: {
+  type: String,
+  enum: ["pending", "awaiting approval", "approved", "rejected"], // 👈 added "awaiting approval"
+  default: "pending"
+},
   requiresCacVerification: { type: Boolean, default: false },
   carRejectionReason: { type: Boolean, default: false },
 
